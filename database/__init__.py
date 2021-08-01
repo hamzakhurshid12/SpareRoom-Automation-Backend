@@ -87,7 +87,7 @@ def createDatabaseStructure(connection):
       `user_id` INTEGER NOT NULL,
       `person_id` varchar(80) NOT NULL,
       `isReplied` boolean NOT NULL,
-      `last_time_contacted` INTEGER NOT NULL,
+      `last_time_contacted` datetime NOT NULL,
       `total_messages` INTEGER DEFAULT 0,
 
        FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 

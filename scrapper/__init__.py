@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 import requests
 from urllib.parse import quote
 import json
+from datetime import datetime
+import time
 
 def getCSRFToken(session):
     url = "https://www.spareroom.co.uk/flatshare/logon.pl"
@@ -41,19 +43,21 @@ def saveHTML(htmlData):
 def getClicks(session):
     response = session.request("GET", "https://www.spareroom.co.uk/api/search-campaigns/23668/statistics")
     stats = json.loads(response.text)
-    '''clicks = int(stats['data'][0]['clicks_search'])
-    date = stats['data'][0]['date']
-    if(clicks==0):
-        for i in range(1,20):
-            clickTemp = int(stats['data'][i]['clicks_search'])
-            dateTemp = stats['data'][i]['date']
-            if(clicks!=0): 
-                clicks = clickTemp
-                date = dateTemp
-                break
-
-    print(f'The clicks on {date} are {clicks}')'''
-    return 10
+    if("data" in stats):
+        clicks = int(stats['data'][0]['clicks_search'])
+        date = stats['data'][0]['date']
+        if(clicks==0):
+            for i in range(1,20):
+                clickTemp = int(stats['data'][i]['clicks_search'])
+                dateTemp = stats['data'][i]['date']
+                if(clicks!=0): 
+                    clicks = clickTemp
+                    date = dateTemp
+                    break
+        return clicks
+        
+    else:
+        return 0
 
 
 def getRoomsRatio(query):
@@ -184,9 +188,9 @@ def messageCount(session, person_id):
         resp = session.get(urlInbox)
         bsObj = BeautifulSoup(resp.text, 'html.parser')
         count = len(bsObj.find('ul',{'class': 'conversation'}).findAll('li'))
-        print(count)
+        return (count)
     else:
-        print(2)
+        return 0
 
 def minimumTerm(personId):
     url = 'https://www.spareroom.co.uk/flatshare/flatmate_detail.pl?flatshare_id='+ personId
@@ -207,11 +211,19 @@ def minimumTerm(personId):
 def main():
     #username = "rooms@propertypeopleni.com"
     #password = "Atlantic"
-    username = 'kamrankhadijadj@gmail.com'
+    '''username = 'kamrankhadijadj@gmail.com'
     password = 'Khadija?9'
     
     session = getLoginSession(username, password)
-    messageCount(session, '8345971')
+    getClicks(session)'''
+    #print(datetime.strptime('2021-07-31T23:00:00Z'))
+    d1 = datetime(2000,5,1,13,5,12)
+    d2 = datetime.now()
+    d3 = d2 - d1
+    print(d1)
+    print(d2)
+    print(d3.total_seconds())
+
 
 
 if __name__ == "__main__":

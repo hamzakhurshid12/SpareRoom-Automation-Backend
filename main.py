@@ -91,8 +91,8 @@ def sendMessagesToUncontactedPeople(user):
 
             activity = 'Message sent to Person({}) from {}'.format(person_id, area_name)
             conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(),activity))
-            current_hour = int(str(datetime.now())[11:13])
-            conn.execute("UPDATE tb_people_contacted SET last_time_contacted=?, total_messages=? WHERE user_id=? AND person_id=?",(current_hour, msgCount, user_id, person_id))
+            current_time = (datetime.now())
+            conn.execute("UPDATE tb_people_contacted SET last_time_contacted=?, total_messages=? WHERE user_id=? AND person_id=?",(current_time, msgCount, user_id, person_id))
 
         if(len(UncontactedPeople) == 0):
             display_message = 'NO UNCONTACTED PERSON; USER: {}; AREA: {}; TIME: {}:00:00;'.format(user_name,area_name, int(str(datetime.now())[11:13]))
@@ -123,8 +123,6 @@ def checkForReply(user):
 
 
 def sendFollowUpMessage(user):
-    #based on follow up duration update tb_people_contacted last-time_contacted
-    #also calculate time passed accordingly and compare with follow up duration maybe in months
     conn = db_connection()
     user_id = user[0]
     user_name = [1]
@@ -136,17 +134,18 @@ def sendFollowUpMessage(user):
     for person_id in PersonNotReplied:
         person_id = person_id[0]
         last_time_contacted = conn.execute("SELECT last_time_contacted FROM tb_people_contacted WHERE user_id=? AND person_id=?",(user_id, person_id)).fetchone()[0]
-        current_hour = int(str(datetime.now())[11:13])
         FollowUpDuration = conn.execute("SELECT followUpDuration FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
         FollowUpMessage = conn.execute("SELECT followUpMessage FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
-        if(abs(last_time_contacted-current_hour) >= FollowUpDuration):
+        current_time = datetime.now()
+        time_passed = current_time-last_time_contacted
+        if(time_passed.total_seconds() >= FollowUpDuration):
             sendMessage(session, person_id, FollowUpMessage)
-            current_hour = int(str(datetime.now())[11:13])
             msgCount = messageCount(session, person_id)
-            conn.execute("UPDATE tb_people_contacted SET last_time_contacted=?, total_messages=? WHERE user_id=? AND person_id=?",(current_hour, msgCount, user_id, person_id))
+            conn.execute("UPDATE tb_people_contacted SET last_time_contacted=?, total_messages=? WHERE user_id=? AND person_id=?",(current_time, msgCount, user_id, person_id))
             activity = 'Follow Up Message sent to Person({}) '.format(person_id)
             conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(),activity))
             print('FOLLOW UP MESSAGE SENT; USER: {}; PERSON: {};'.format(user_name,person_id))
+            conn.execute("DELETE FROM tb_people_contacted WHERE user_id=? AND person_id=?",(user_id,person_id))
     conn.commit()
 
 
@@ -175,12 +174,17 @@ def updateRatio(area):
     area_id = area[0]
     area_name = area[1]
     last_ratio_update = area[3]
+    updated_this_hour = False
     current_hour = int(str(datetime.now())[11:13])
-    if(current_hour-last_ratio_update == 0):
-        ratio = getRoomsRatio(area_name)
-        conn.execute("UPDATE tb_areas SET ratio = ?, last_ratio_update=? WHERE id=?",(ratio, current_hour,area_id))
-        print('RATIO UPDATED; AREA: {}; TIME: {}:00:00;'.format(area_name, current_hour))
+    if(abs(current_hour-last_ratio_update) == 0):
+        if(updated_this_hour==False):
+            ratio = getRoomsRatio(area_name)
+            conn.execute("UPDATE tb_areas SET ratio = ?, last_ratio_update=? WHERE id=?",(ratio, current_hour,area_id))
+            updated_this_hour = True
+            print('RATIO UPDATED; AREA: {}; TIME: {}:00:00;'.format(area_name, current_hour))
+        
     else:
+        updated_this_hour = False
         print('RATIO NOT UPDATED; AREA: {}; TIME: {}:00:00;'.format(area_name, current_hour))
 
     conn.commit()
