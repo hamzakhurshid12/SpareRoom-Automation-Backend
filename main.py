@@ -2,7 +2,7 @@
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-from operator import indexOf
+'''from operator import indexOf
 from bs4 import BeautifulSoup
 import requests
 from urllib.parse import quote
@@ -12,408 +12,210 @@ from requests.sessions import session
 import database
 import datetime
 
-from flask import Flask
+from flask import Flask, request
 from flask_restful import Api, Resource
 from flask_sqlalchemy import SQLAlchemy
+'''
+from datetime import datetime
 
-app = Flask(__name__)
-api = Api(app)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-db = SQLAlchemy(app)
-
-
-def getCSRFToken(session):
-    url = "https://www.spareroom.co.uk/flatshare/logon.pl"
-    resp = session.get(url)  # sets cookie
-    bsObj = BeautifulSoup(resp.text, "html.parser")
-    csrftoken = bsObj.find('div', {'id': 'userAuth'})['data-csrf-token']
-    csrftoken = quote(csrftoken)
-    return csrftoken
-
-def getLoginSession(username, password):
-    url = "https://www.spareroom.co.uk/flatshare/logon.pl"
-    username = quote(username)
-    password = quote(password)
-    s = requests.session()
-    payload = f'csrf_token={getCSRFToken(s)}' \
-              f'&email={username}&loginfrom_url=%252F&password={password}&remember_me=N&sign-in-button= '
-
-    headers = {
-        'Upgrade-Insecure-Requests': '1',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36 Edg/88.0.705.50',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-    }
-    s.request("POST", url, headers=headers, data=payload)
-    return s
-
-def saveHTML(htmlData):
-    file = open("response.html", "w+")
-    file.write(htmlData)
-    file.close()
-
-def getClicks(session):
-    response = session.request("GET", "https://www.spareroom.co.uk/api/search-campaigns/23668/statistics")
-    stats = json.loads(response.text)
-    clicks = int(stats['data'][0]['clicks_search'])
-    date = stats['data'][0]['date']
-    if(clicks==0):
-        for i in range(1,20):
-            clickTemp = int(stats['data'][i]['clicks_search'])
-            dateTemp = stats['data'][i]['date']
-            if(clicks!=0): 
-                clicks = clickTemp
-                date = dateTemp
-                break
-
-    print(f'The clicks on {date} are {clicks}')
-    return clicks
+from werkzeug.datastructures import CombinedMultiDict
+from scrapper import *
+import sqlite3
 
 
-def getRoomsRatio(query):
-    urlRental = 'https://www.spareroom.co.uk/flatshare/search.pl?nmsq_mode=normal&action=search&max_per_page=&flatshare_type=offered&search='+query
-    resp = requests.request('GET', urlRental)
-    bsObj = BeautifulSoup(resp.text, 'html.parser')
-    totalRentals = bsObj.find('p', {'class': 'navcurrent'}).findAll('strong')[-1].get_text()
+def db_connection():
+    conn = None
+    try:
+        conn = sqlite3.connect("main_database.db")
+    except sqlite3.error as e:
+        print(e)
+    return conn
 
-    urlWanted = 'https://www.spareroom.co.uk/flatshare/search.pl?nmsq_mode=normal&action=search&max_per_page=&flatshare_type=wanted&search='+query
-    resp = requests.request('GET', urlWanted)
-    bsObj = BeautifulSoup(resp.text, 'html.parser')
-    totalWanted = bsObj.find('p', {'class': 'navcurrent'}).findAll('strong')[-1].get_text()
-    print(f'{totalWanted} properties wanted in {query}, while {totalRentals} properties are available to rent!\nRatio of wanted to rental: {round(int(totalWanted)/int(totalRentals),2)}')
-    return round(int(totalWanted)/int(totalRentals),2)
+def updateStats(user):
+    conn = db_connection()
+    user_id = user[0]
+    user_name = user[1]
+    spare_room_username = user[4]
+    spare_room_password = user[5]
+    last_stats_update = user[7]
 
+    session = getLoginSession(spare_room_username, spare_room_password)
+    current_stats = getClicks(session)
+    current_hour = int(str(datetime.now())[11:13])
+    display_message = 'STATS NOT UPDATED; USER: {}; TIME: {}:00:00;'.format(user_name, current_hour)
+    if(last_stats_update!=0):
+        time_passed = abs(current_hour - last_stats_update)
+        if(time_passed >= 1):
+            conn.execute("UPDATE tb_stats SET clicks=? WHERE user_id=? AND timeStamp=?",(current_stats, user_id, current_hour))
+            activity = 'Stats updated to {} for time {}:00:00'.format(current_stats, current_hour)
+            conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(),activity))
+            conn.execute("UPDATE tb_users SET last_stats_update=? WHERE id=?",(current_hour, user_id))
+            display_message = ('STATS UPDATED; USER: {}; TIME: {}:00:00; CLICKS: {}'.format(user_name, current_hour, current_stats))
+    else:
+        conn.execute("UPDATE tb_stats SET clicks=? WHERE user_id=? AND timeStamp=?",(current_stats, user_id, current_hour))
+        activity = 'Stats updated to {} for time {}:00:00'.format(current_stats, current_hour)
+        conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(), activity))
+        conn.execute("UPDATE tb_users SET last_stats_update=? WHERE id=?",(current_hour, user_id))
+        display_message = ('STATS UPDATED; USER: {}; TIME: {}:00:00; CLICKS: {}'.format(user_name, current_hour, current_stats))
+    print(display_message)
+    conn.commit()
 
-def getCountListings(session):
-    urlListings = 'https://www.spareroom.co.uk/flatshare/mylistings.pl'
-    resp = session.get(urlListings)
-    bsObj = BeautifulSoup(resp.text, 'html.parser')
-    totalListings = bsObj.find('p', {'class': 'navcurrent'}).findAll('strong')[-1].get_text()
-    print(f'The total posted Ads are: {totalListings}')
-    return int(totalListings)
+def sendMessagesToUncontactedPeople(user):
+    conn = db_connection()
+    user_id = user[0]
+    user_name = user[1]
+    spare_room_username = user[4]
+    spare_room_password = user[5]
+    session = getLoginSession(spare_room_username, spare_room_password)
 
-def getListingIDs(session):
-    LiveListingIds = []
-    totalListing = getCountListings(session)
+    user_areas = conn.execute("SELECT * FROM tb_user_areas WHERE user_id=?",(user_id,))
+    for user_area in user_areas:
+        area_id = user_area[2]
+        area = conn.execute("SELECT * FROM tb_areas WHERE id=?",(area_id,)).fetchone()
+        area_name = area[1]
 
-    for i in range(0, totalListing, 10):
-        urlListings = 'https://www.spareroom.co.uk/flatshare/mylistings.pl?offset=' + str(i)
-        resp = session.get(urlListings)
-        bsObj = BeautifulSoup(resp.text, 'html.parser')
-        LiveListings = bsObj.findAll('div',{'class': 'myListing live'})
-        BeforeAdString = 'Ad ref # '
-        for liveListing in LiveListings:
-            AdRef = liveListing.find('span',{'class':'ad_ref'}).get_text()[len(BeforeAdString):]
-            LiveListingIds.append(AdRef)
-        if(len(LiveListings)<10): break
-    
-    print(f'The Live Listings are: {LiveListingIds}')
-    return LiveListingIds
-
-
-def renewListings(session, listingIDs):
-    for listingID in listingIDs:
-        url = "https://www.spareroom.co.uk/flatshare/advert_renew.pl?advert_id="+ listingID
-        session.request('GET', url)
-
-def sendMessage(session, userId, message):
-    url = f"https://www.spareroom.co.uk/flatshare/flatmate_detail.pl?flatshare_id={userId}&mode=contact&submode=byemail"
-    payload = f'flatshare_id={userId}' \
-              f'&message={message}&action=sendemail&mode=contact&submode=byemail&flatshare_type=wanted&M_context=105&M_context_for_link=115&search_id=1053077568'
-
-    headers = {
-        'upgrade-insecure-requests': '1',
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-        'content-type': 'application/x-www-form-urlencoded',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-    }
-    response = session.request("POST", url, headers=headers, data=payload)
-    print(response.status_code)
-
-def getLocationId(session, location):
-    url = 'https://www.spareroom.co.uk/flatshare/search.pl?nmsq_mode=normal&action=search&max_per_page=&flatshare_type=wanted&search=' + location + '&min_rent=&max_rent=&per=pcm&available_search=N&day_avail=22&mon_avail=07&year_avail=2021&min_term=0&max_term=0&days_of_wk_available=&room_types=&furnished=&share_type=&genderfilter=&couples=&min_age_req=&max_age_req=&smoking=&keyword=' 
-    resp = session.get(url,allow_redirects=False)
-    locationHeader = resp.headers['location']
-    print(locationHeader[60:(len(locationHeader) - 1)])
-    return locationHeader[60:(len(locationHeader) - 1)]
-
-def getCountPeople(session, query):
-    urlPeopleLookingForRoom = 'https://www.spareroom.co.uk/flatmate/flatmates.pl?search_id=' + getLocationId(session, query)
-    resp = session.get(urlPeopleLookingForRoom)
-    bsObj = BeautifulSoup(resp.text, 'html.parser')
-    totalPeople = bsObj.find('p', {'class': 'navcurrent'}).findAll('strong')[-1].get_text()
-    if(totalPeople[-1]=='+'): totalPeople = totalPeople[:-1]
-    print(f'The total number of people looking for rooms are: {totalPeople}')
-    return int(totalPeople)
-
-def getPeopleIDs(session,query):
-    PeopleIDs = []
-    ContactedPeopleIDs = []
-    UncontactedPeopleIDs = []
-    contactedRest = 0
-    countPeople = getCountPeople(session, query)
-    for i in range(0,countPeople,10):
-        urlPeopleLookingForRoom = 'https://www.spareroom.co.uk/flatmate/flatmates.pl?offset=' + str(i) + '&search_id=' + getLocationId(session, query) + '&sort_by=age&mode=list'
-        resp = session.get(urlPeopleLookingForRoom)
-        bsObj = BeautifulSoup(resp.text, 'html.parser')
-        PeoplesListings = bsObj.findAll('li',{'class': 'listing-result'})
-        for listing in PeoplesListings:
-            if(listing.find('span',{'class': 'tooltip savedAd'})):
-                contactedRest = 1
-                break
+        UncontactedPeople = getPeopleIDs(session,area_name)
+        #UncontactedPeople = ['15857312']
+        for person_id in UncontactedPeople:
+            conn.execute("INSERT INTO tb_people_contacted (user_id, person_id, isReplied, last_time_contacted) VALUES (?, ?, ?, ?)",(user_id, person_id, False, -1))            
+            minTerm = minimumTerm(person_id)
+            if(minTerm >= 24):
+                message = conn.execute("SELECT longTermMessage FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
+            elif (minTerm >= 12):
+                message = conn.execute("SELECT midTermMessage FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
             else:
-                UncontactedPeopleIDs.append(listing['data-listing-id'])
-        if(contactedRest==1):
-            break
-    print(f'The total contacted people are: {len(ContactedPeopleIDs)}')
-    print(f'The total uncontacted people are: {len(UncontactedPeopleIDs)}')
-    print(len(ContactedPeopleIDs) + len(UncontactedPeopleIDs))
-    print(f'Contacted People IDs: {ContactedPeopleIDs}')
-    print(f'Uncontacted People IDs: {UncontactedPeopleIDs}')
-    return UncontactedPeopleIDs
+                message = conn.execute("SELECT shortTermMessage FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
+
+            sendMessage(session, person_id, message)
+            msgCount = messageCount(session, person_id)
+
+            activity = 'Message sent to Person({}) from {}'.format(person_id, area_name)
+            conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(),activity))
+            current_hour = int(str(datetime.now())[11:13])
+            conn.execute("UPDATE tb_people_contacted SET last_time_contacted=?, total_messages=? WHERE user_id=? AND person_id=?",(current_hour, msgCount, user_id, person_id))
+
+        if(len(UncontactedPeople) == 0):
+            display_message = 'NO UNCONTACTED PERSON; USER: {}; AREA: {}; TIME: {}:00:00;'.format(user_name,area_name, int(str(datetime.now())[11:13]))
+        else:
+            display_message = ('MESSAGE SENT; USER: {}; AREA: {}; TIME: {}:00:00; PEOPLE: {}'.format(user_name,area_name, int(str(datetime.now())[11:13]), UncontactedPeople))
+        print(display_message)
+
+    conn.commit()
+
+def checkForReply(user):
+    conn = db_connection()
+    user_id = user[0]
+    user_name = user[1]
+    spare_room_username = user[4]
+    spare_room_password = user[5]
+    session = getLoginSession(spare_room_username, spare_room_password)
+
+    PersonNotReplied = conn.execute("SELECT person_id FROM tb_people_contacted WHERE user_id=? AND isReplied=?",(user_id, False)).fetchall()
+    for person_id in PersonNotReplied:
+        person_id = person_id[0]
+        old_message_count = conn.execute("SELECT total_messages FROM tb_people_contacted WHERE user_id=? AND person_id=?",(user_id, person_id)).fetchone()[0]
+        new_message_count = messageCount(session, person_id)
+        if(new_message_count > old_message_count):
+            conn.execute("UPDATE tb_people_contacted SET isReplied=?, total_messages=? WHERE user_id=? AND person_id=?",(True, new_message_count, user_id, person_id))
+            print('USER RECEIVED REPLY; USER: {}; PERSON: {};'.format(user_name,person_id))
+
+    conn.commit()
 
 
-class TrafficHour(Resource):
-    def get(self, user_id):
-        #user_name = database query to get username against user id
-        #password = database query to get password against user id
-        username = 'kamrankhadijadj@gmail.com'
-        password = 'Khadija?9'
-        #clicksInLast24Hours = (Hour1:Hour24) get entry againts user_id from table clicks
-        #clicksInLast24Hour[0] = clicks['hour 0'] ------- till hour 24
-        clicksInLast24Hours = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]
-        IndexOfMax = indexOf(max(clicksInLast24Hours))
-        CurrentHour = datetime.datetime.now().hour
-        PeakHour = CurrentHour - IndexOfMax + 1
-        return PeakHour
-   
-    #call after every hour to update the clicks
-    def patch(self, user_id):
-        #user_name = database query to get username against user id
-        #password = database query to get password against user id
-        username = 'kamrankhadijadj@gmail.com'
-        password = 'Khadija?9'
-        session = getLoginSession(username, password)
-        clicksToday = getClicks(session)
-        #clicksInLast24Hours = (Hour1:Hour24) get entry againts user_id from table clicks
-        #clicksInLast24Hour[0] = clicks['hour 0'] ------- till hour 24
-        clicksInLast24Hours = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]
-        CLicksFromLast23Hours = sum(clicksInLast24Hours[0:23])
-        LastHourClicks = clicksToday - CLicksFromLast23Hours
-        #update database such that
-        #hour0 = last hour click
-        #hour 1 = clicksInLast24Hours[0]
-        #hour 24 = clicksInLast24Hours[22]
+def sendFollowUpMessage(user):
+    #based on follow up duration update tb_people_contacted last-time_contacted
+    #also calculate time passed accordingly and compare with follow up duration maybe in months
+    conn = db_connection()
+    user_id = user[0]
+    user_name = [1]
+    spare_room_username = user[4]
+    spare_room_password = user[5]
+    session = getLoginSession(spare_room_username, spare_room_password)
 
-#-----Register as a resource
-api.add_resource(TrafficHour, "/trafficHour/<int:user_id>/")
+    PersonNotReplied = conn.execute("SELECT person_id FROM tb_people_contacted WHERE user_id=? AND isReplied=?",(user_id, False)).fetchall()
+    for person_id in PersonNotReplied:
+        person_id = person_id[0]
+        last_time_contacted = conn.execute("SELECT last_time_contacted FROM tb_people_contacted WHERE user_id=? AND person_id=?",(user_id, person_id)).fetchone()[0]
+        current_hour = int(str(datetime.now())[11:13])
+        FollowUpDuration = conn.execute("SELECT followUpDuration FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
+        FollowUpMessage = conn.execute("SELECT followUpMessage FROM tb_messages WHERE user_id=?",(user_id,)).fetchone()[0]
+        if(abs(last_time_contacted-current_hour) >= FollowUpDuration):
+            sendMessage(session, person_id, FollowUpMessage)
+            current_hour = int(str(datetime.now())[11:13])
+            msgCount = messageCount(session, person_id)
+            conn.execute("UPDATE tb_people_contacted SET last_time_contacted=?, total_messages=? WHERE user_id=? AND person_id=?",(current_hour, msgCount, user_id, person_id))
+            activity = 'Follow Up Message sent to Person({}) '.format(person_id)
+            conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(),activity))
+            print('FOLLOW UP MESSAGE SENT; USER: {}; PERSON: {};'.format(user_name,person_id))
+    conn.commit()
 
 
+def renew(user):
+    conn = db_connection()
+    user_id = user[0]
+    user_name = user[1]
+    spare_room_username = user[4]
+    spare_room_password = user[5]
+    session = getLoginSession(spare_room_username, spare_room_password)
+    last_time_renewed = conn.execute("SELECT last_time_renewed FROM tb_users WHERE id=?",(user_id,)).fetchone()[0]
+    renew_hours = conn.execute("SELECT renew_hours FROM tb_users WHERE id=?",(user_id,)).fetchone()[0]
+    current_hour = int(str(datetime.now())[11:13])
+    if(abs(last_time_renewed - current_hour)>=renew_hours):
+        renewListings(session)
+        activity = 'Listings renewed'
+        conn.execute("INSERT INTO tb_logs (user_id, timeStamp, activity) VALUES (?, ?, ?)",(user_id, datetime.now(),activity))
+        conn.execute("UPDATE tb_users SET last_time_renewed=? WHERE id=?",(current_hour,user_id))
+        print('LISTINGS RENEWED; USER: {}; TIME: {}:00:00;'.format(user_name,current_hour))
+    else:
+        print('LISTINGS NOT RENEWED; USER: {}; TIME: {}:00:00;'.format(user_name,current_hour))
+    conn.commit()
 
-class RoomsRatio(Resource):
-    def get(self, location):
-        ratio = getRoomsRatio(location)
-        return ratio
+def updateRatio(area):
+    conn = db_connection()
+    area_id = area[0]
+    area_name = area[1]
+    last_ratio_update = area[3]
+    current_hour = int(str(datetime.now())[11:13])
+    if(current_hour-last_ratio_update == 0):
+        ratio = getRoomsRatio(area_name)
+        conn.execute("UPDATE tb_areas SET ratio = ?, last_ratio_update=? WHERE id=?",(ratio, current_hour,area_id))
+        print('RATIO UPDATED; AREA: {}; TIME: {}:00:00;'.format(area_name, current_hour))
+    else:
+        print('RATIO NOT UPDATED; AREA: {}; TIME: {}:00:00;'.format(area_name, current_hour))
 
-#-----Register as a resource
-api.add_resource(RoomsRatio, "/roomRatio/<string:location>/")
-
-
-class RenewListings(Resource):
-    def put(self, user_id):
-        #read from from
-        renew_time = 1
-        #set renew time in database using user_id
-          
-    def patch(self, user_id):
-        #user_name = database query to get username against user id
-        #password = database query to get password against user id
-        username = 'kamrankhadijadj@gmail.com'
-        password = 'Khadija?9'
-        session = getLoginSession(username, password)
-        LiveListingIDs = getListingIDs(session)
-        renewListings(session, LiveListingIDs)
-
-#-----Register as a resource
-api.add_resource(RenewListings, "/renewListings/<int:user_id>/")
-
-class ContactPeople(Resource):
-    def post(self, user_id):
-        #user_name = database query to get username against user id
-        #password = database query to get password against user id
-        username = 'kamrankhadijadj@gmail.com'
-        password = 'Khadija?9'
-        session = getLoginSession(username, password)
-        #read contact message from database against user id 
-        contactMessage = 'This is a contact Message'
-        #location = form read
-        location = 'Belfast'
-        PeopleIds = getPeopleIDs(session, location)
-        for peopleId in PeopleIds:
-            sendMessage(session, peopleId, contactMessage)
-            recentlyContactedPeople = " " + peopleId
-        recentlyContactedPeople = recentlyContactedPeople[1:]
-        #update in the database as recently contacted
-    
-    def patch(self, user_id):
-        #user_name = database query to get username against user id
-        #password = database query to get password against user id
-        username = 'kamrankhadijadj@gmail.com'
-        password = 'Khadija?9'
-        session = getLoginSession(username, password)
-        #read follow up message from database against user id 
-        followUpMessage = 'This is a follow up Message'
-        #read from the database
-        recentlyContacted = []
-        for peopleId in recentlyContacted:
-            sendMessage(session, peopleId, followUpMessage)
-#-----Register as a resource
-api.add_resource(ContactPeople, "/contactPeople/<int:user_id>/")
-
-
-class ContactMessage(Resource):
-    def post(self, user_id):
-        #user_name = database query to get username against user id
-        #password = database query to get password against user id
-        username = 'kamrankhadijadj@gmail.com'
-        password = 'Khadija?9'
-        session = getLoginSession(username, password)
-        #read followUpMessages and contact messages from
-
-        followUpMessage = 'This is an updated follow up Message'
-        contactMessage = 'This is an updated contact Message'
-
-        #update these values in a database
-
-#-----Register as a resource
-api.add_resource(ContactMessage, "/contactMessage/<int:user_id>/")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    conn.commit()
 
 
 def main():
-    username = "rooms@propertypeopleni.com"
-    password = "Atlantic"
+    #creating a db connection to fetch data from the database
+    conn = db_connection()
 
-    #username = "kamrankhadijadj@gmail.com"
-    #password = "Khadija?9"
-    session = getLoginSession(username, password)
-    
-    #userId = 15838185
-    #message = 'gjkjhkhk'
-    #sendMessage(session, userId, message)
-    
-    #stats = getStats(session)
-    #postedAds = getCountListings(session)
-    listingIDs = getListingIDs(session)
-    #getRoomsRatio('Belfast')
-    
-    
-    renewListings(session, listingIDs)
-    #print(len(listingsIDs))
-    # print("Total Rooms to be occupied:"+str(getRoomsOccupancy(session)))
+    get_all_users_query = "SELECT * FROM tb_users"
+    get_all_areas_query = "SELECT * FROM tb_areas"
+    users = conn.execute(get_all_users_query).fetchall()
+    areas = conn.execute(get_all_areas_query).fetchall()
 
-    #getCountPeople(session, 'Belsize Park')
-    #getPeopleIDs(session, 'Belfast')
+    while(True):
+        for user in users:
+            print()
+            updateStats(user)
+            renew(user)
 
-    getClicks(session)
+            sendMessagesToUncontactedPeople(user)
+            checkForReply(user)
+            sendFollowUpMessage(user)
 
-if __name__ == '__main__':
-    app.run(debug=True)
-    
-
-
-''''
-def getRoomsOccupancy(session):
-    url = "https://www.spareroom.co.uk/api/search-campaigns/23668/listings"
-    response = session.request('GET', url)
-    listings = json.loads(response.text)
-    totalRooms = 0
-    for listing in listings['data']:
-        try:
-            totalRooms += int(listing['advert']['property']['rooms']['total'])
-        except:
-            pass
-    return totalRooms
-
-def getRenewableListingIDs(session, totalListing):
-
-    #renewableListingIDs = []
-    LiveListingIds = []
-
-    for i in range(0, totalListing, 10):
-        urlListings = 'https://www.spareroom.co.uk/flatshare/mylistings.pl?offset=' + str(i)
-        resp = session.get(urlListings)
-        bsObj = BeautifulSoup(resp.text, 'html.parser')
-
-        LiveListings = bsObj.findAll('div',{'class': 'myListing-link myListing-link__activate myListing-link__activate--renew'})
-        LiveListingIdsCurrentPage = []
-        for liveListing in LiveListings:
-            LiveListingIdsCurrentPage.append(liveListing['data-advert-id'])
-            LiveListingIds.append(liveListing['data-advert-id'])
-
-        if(len(LiveListingIdsCurrentPage)<10): break
-        #for id in LiveListingIdsCurrentPage:
-        #    renListing = bsObj.find('div',{'data-advert-id': id})
-            #ask Hamza : can't find the button tag cz it changes based on the renew status
-        #    renewableListing = renListing.find('button', {'class': 'button button--link'})
-        #    if(renewableListing): renewableListingIDs.append(id)
         
-        #recheck ask Hamza
-        
+        for area in areas:
+            print()
+            updateRatio(area)
 
-    print(f'The Live Listings are: {LiveListingIds}')
-    #print(f'The renewable Listings are: {renewableListingIDs}')
+        conn.commit()
+
+            
     
-    #return renewableListingIDs
 
-
-def getListings(session):
-    url = "https://www.spareroom.co.uk/api/search-campaigns/23668/listings"
-    response = session.request('GET', url)
-    listings = json.loads(response.text)
-    return listings
-
-
-# Make Resources within the API
-
-class Session(Resource):
-    def get(self, username, password):
-        url = "https://www.spareroom.co.uk/flatshare/logon.pl"
-        username = quote(username)
-        password = quote(password)
-        s = requests.session()
-        payload = f'csrf_token={getCSRFToken(s)}' \
-                f'&email={username}&loginfrom_url=%252F&password={password}&remember_me=N&sign-in-button= '
-
-        headers = {
-            'Upgrade-Insecure-Requests': '1',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36 Edg/88.0.705.50',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-        }
-        s.request("POST", url, headers=headers, data=payload)
-        return s
-
+if __name__ == "__main__":
+    main()
 
     
-#-----Register as a resource
-api.add_resource(Session, "/session/<string:username>/<string:password>")'''

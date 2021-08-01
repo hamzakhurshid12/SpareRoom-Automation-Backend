@@ -12,7 +12,8 @@ def initialize_database():
 
 def createDatabaseStructure(connection):
     c = connection.cursor()
-    c.execute('''
+
+    queryUsers = '''
         CREATE TABLE IF NOT EXISTS `tb_users` (
       `id` INTEGER PRIMARY KEY AUTOINCREMENT,
       `username` varchar(80) UNIQUE NOT NULL,
@@ -20,44 +21,86 @@ def createDatabaseStructure(connection):
       `role` varchar(20) NOT NULL,
       `site_username` varchar(80) NOT NULL,
       `site_password` varchar(80) NOT NULL,
-      `renew_time` INTEGER DEFAULT 1 NOT NULL
-      `contact_message` varchar(80) NOT NULL,
-      `follow_up_message` varchar(80) NOT NULL,
-        )
-    ''')
+      `renew_hours` INTEGER DEFAULT 1 NOT NULL,
+      `last_stats_update` INTEGER DEFAULT 0 NOT NULL,
+      `last_time_renewed` INTEGER DEFAULT 0 NOT NULL
 
-    create_table = '''
-    CREATE TABLE IF NOT EXISTS click_history (
+      )
+    '''
+
+    queryMessages = '''
+        CREATE TABLE IF NOT EXISTS `tb_messages` (
       `id` INTEGER PRIMARY KEY AUTOINCREMENT,
-      `hour1` INTEGER DEFAULT 0 NOT NULL,
-      `hour2` INTEGER DEFAULT 0 NOT NULL,
-      `hour3` INTEGER DEFAULT 0 NOT NULL,
-      `hour4` INTEGER DEFAULT 0 NOT NULL,
-      `hour5` INTEGER DEFAULT 0 NOT NULL,
-      `hour6` INTEGER DEFAULT 0 NOT NULL,
-      `hour7` INTEGER DEFAULT 0 NOT NULL,
-      `hour8` INTEGER DEFAULT 0 NOT NULL,
-      `hour9` INTEGER DEFAULT 0 NOT NULL,
-      `hour10` INTEGER DEFAULT 0 NOT NULL,
-      `hour11` INTEGER DEFAULT 0 NOT NULL,
-      `hour12` INTEGER DEFAULT 0 NOT NULL,
-      `hour13` INTEGER DEFAULT 0 NOT NULL,
-      `hour14` INTEGER DEFAULT 0 NOT NULL,
-      `hour15` INTEGER DEFAULT 0 NOT NULL,
-      `hour16` INTEGER DEFAULT 0 NOT NULL,
-      `hour17` INTEGER DEFAULT 0 NOT NULL,
-      `hour18` INTEGER DEFAULT 0 NOT NULL,
-      `hour19` INTEGER DEFAULT 0 NOT NULL,
-      `hour20` INTEGER DEFAULT 0 NOT NULL,
-      `hour21` INTEGER DEFAULT 0 NOT NULL,
-      `hour22` INTEGER DEFAULT 0 NOT NULL,
-      `hour23` INTEGER DEFAULT 0 NOT NULL,
-      `hour24` INTEGER DEFAULT 0 NOT NULL,
+      `shortTermMessage` text NOT NULL,
+      `midTermMessage` text NOT NULL,
+      `longTermMessage` text NOT NULL,      
+      `followUpMessage` text NOT NULL,
+      `followUpDuration` INTEGER NOT NULL,
       `user_id` INTEGER NOT NULL,
-       FOREIGN KEY (user_id) REFERENCES tb_users(id) NOT NULL
-        )'''
+
+       FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 
+      )
+    '''
+    queryAreas = '''
+        CREATE TABLE IF NOT EXISTS `tb_areas` (
+      `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+      `areaName` varchar(150) NOT NULL,
+      `ratio` INTEGER NOT NULL,
+      `last_ratio_update` INTEGER DEFAULT 0 NOT NULL
+      )
+    '''
+    queryUserAreas = '''
+        CREATE TABLE IF NOT EXISTS `tb_user_areas` (
+      `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+      `user_id` INTEGER NOT NULL,
+      `area_id` INTEGER NOT NULL,
+
+       FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 
+       FOREIGN KEY (`area_id`) REFERENCES `tb_areas`(`id`) 
+      )
+    '''
+    queryStats = '''
+        CREATE TABLE IF NOT EXISTS `tb_stats` (
+      `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+      `user_id` INTEGER NOT NULL,
+      `clicks` INTEGER NOT NULL,
+      `timeStamp` INTEGER DEFAULT 0 NOT NULL,
+
+       FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 
+      )
+    '''
+
+    queryLogs = '''
+        CREATE TABLE IF NOT EXISTS `tb_logs` (
+      `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+      `user_id` INTEGER NOT NULL,
+      `timeStamp` datetime NOT NULL,
+      `activity` varchar(150) NOT NULL,
+
+       FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 
+      )
+    '''
+
+    queryPeopleContacted = '''
+        CREATE TABLE IF NOT EXISTS `tb_people_contacted` (
+      `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+      `user_id` INTEGER NOT NULL,
+      `person_id` varchar(80) NOT NULL,
+      `isReplied` boolean NOT NULL,
+      `last_time_contacted` INTEGER NOT NULL,
+      `total_messages` INTEGER DEFAULT 0,
+
+       FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 
+      )
+    '''
     
-    c.execute(create_table)
+    c.execute(queryUsers)
+    c.execute(queryMessages)
+    c.execute(queryAreas)
+    c.execute(queryUserAreas)
+    c.execute(queryStats)
+    c.execute(queryLogs)
+    c.execute(queryPeopleContacted)
     connection.commit()
 
 initialize_database()
