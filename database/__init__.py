@@ -22,8 +22,8 @@ def createDatabaseStructure(connection):
       `site_username` varchar(80) NOT NULL,
       `site_password` varchar(80) NOT NULL,
       `renew_hours` INTEGER DEFAULT 1 NOT NULL,
-      `last_stats_update` INTEGER DEFAULT 0 NOT NULL,
-      `last_time_renewed` INTEGER DEFAULT 0 NOT NULL
+      `last_stats_update` datetime NOT NULL,
+      `last_time_renewed` datetime NOT NULL
 
       )
     '''
@@ -46,7 +46,7 @@ def createDatabaseStructure(connection):
       `id` INTEGER PRIMARY KEY AUTOINCREMENT,
       `areaName` varchar(150) NOT NULL,
       `ratio` INTEGER NOT NULL,
-      `last_ratio_update` INTEGER DEFAULT 0 NOT NULL
+      `last_ratio_update` datetime DEFAULT 0 NOT NULL
       )
     '''
     queryUserAreas = '''

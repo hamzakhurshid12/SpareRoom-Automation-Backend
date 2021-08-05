@@ -36,8 +36,8 @@ def verify_password(username, password):
       `site_username` varchar(80) NOT NULL,
       `site_password` varchar(80) NOT NULL,
       `renew_hours` INTEGER DEFAULT 1 NOT NULL,
-      `last_stats_update` INTEGER DEFAULT 0 NOT NULL,
-      `last_time_renewed` INTEGER DEFAULT 0 NOT NULL
+      `last_stats_update` datetime NOT NULL,
+      `last_time_renewed` datetime NOT NULL
       )'''
 
 @app.route('/all_users', methods=['GET'])
@@ -77,7 +77,7 @@ def add_user():
         renew_hours = request.form["renew_hours"]
         last_stats_update = request.form["last_stats_update"]
         last_time_renewed = request.form["last_time_renewed"]
-        sql = """INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, llast_time_renewed)
+        sql = """INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
         cursor = cursor.execute(sql, (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed))
         conn.commit()
@@ -249,7 +249,8 @@ def user_messages():
 '''`tb_areas` (
       `id` INTEGER PRIMARY KEY AUTOINCREMENT,
       `areaName` varchar(150) NOT NULL,
-      `ratio` INTEGER NOT NULL
+      `ratio` INTEGER NOT NULL,
+      `last_ratio_update` datetime DEFAULT 0 NOT NULL
       )
     '''
 
@@ -509,6 +510,8 @@ def user_logs():
       `user_id` INTEGER NOT NULL,
       `person_id` varchar(80) NOT NULL,
       `isReplied` boolean NOT NULL,
+      `last_time_contacted` datetime NOT NULL,
+      `total_messages` INTEGER DEFAULT 0,
 
        FOREIGN KEY (`user_id`) REFERENCES `tb_users`(`id`) 
       )'''
