@@ -51,7 +51,6 @@ def all_users():
         users = [
             dict(id=row[0],
              username=row[1], 
-             password=row[2], 
              role=row[3], 
              site_username=row[4], 
              site_password=row[5], 
@@ -77,11 +76,17 @@ def add_user():
         renew_hours = request.form["renew_hours"]
         last_stats_update = request.form["last_stats_update"]
         last_time_renewed = request.form["last_time_renewed"]
-        sql = """INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed)
+        sql1 = """SELECT * FROM tb_users WHERE site_username=?"""
+        cursor1 = cursor.execute(sql1,(site_username,)).fetchall()
+        #print(cursor1)
+        if(cursor1==[]):
+            sql = """INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
-        cursor = cursor.execute(sql, (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed))
-        conn.commit()
-        return f"User created successfully", 201
+            cursor = cursor.execute(sql, (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed))
+            conn.commit()
+            return f"User created successfully", 201
+        else:
+            return f"User already exists", 404
 
 @app.route("/user", methods=["GET", "PUT", "DELETE"])
 @auth.login_required
@@ -91,9 +96,16 @@ def single_user():
     id = request.args['id']
     if request.method == "GET":
         cursor.execute("SELECT * FROM tb_users WHERE id=?", (id,))
-        rows = cursor.fetchall()
-        for r in rows:
-            user = r
+        row= cursor.fetchone()
+        
+        user = dict(id=row[0],
+             username=row[1], 
+             role=row[3], 
+             site_username=row[4], 
+             site_password=row[5], 
+             renew_hours=row[6],
+             last_stats_update=row[7],
+             last_time_renewed=row[8])
         if user is not None:
             return jsonify(user), 200
         else:

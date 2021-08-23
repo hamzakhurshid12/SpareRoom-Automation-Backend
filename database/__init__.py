@@ -19,7 +19,7 @@ def createDatabaseStructure(connection):
       `username` varchar(80) UNIQUE NOT NULL,
       `password` varchar(80) NOT NULL,
       `role` varchar(20) NOT NULL,
-      `site_username` varchar(80) NOT NULL,
+      `site_username` varchar(80) UNIQUE NOT NULL,
       `site_password` varchar(80) NOT NULL,
       `renew_hours` INTEGER DEFAULT 1 NOT NULL,
       `last_stats_update` datetime NOT NULL,

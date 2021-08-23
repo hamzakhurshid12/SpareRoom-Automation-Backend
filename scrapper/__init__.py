@@ -32,7 +32,8 @@ def getLoginSession(username, password):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36 Edg/88.0.705.50',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
     }
-    s.request("POST", url, headers=headers, data=payload)
+    
+    resp = s.request("POST", url, headers=headers, data=payload)
     return s
 
 def saveHTML(htmlData):
@@ -202,7 +203,24 @@ def minimumTerm(personId):
     else:
         return int(minTerm[:-6])
     
+def correctUser(username, password):
+    url = "https://www.spareroom.co.uk/flatshare/logon.pl"
+    username = quote(username)
+    password = quote(password)
+    s = requests.session()
+    payload = f'csrf_token={getCSRFToken(s)}' \
+              f'&email={username}&loginfrom_url=%252F&password={password}&remember_me=N&sign-in-button= '
 
+    headers = {
+        'Upgrade-Insecure-Requests': '1',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36 Edg/88.0.705.50',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
+    }
+    
+    resp = s.request("POST", url, headers=headers, data=payload)
+    if(resp.url == 'https://www.spareroom.co.uk/flatshare/logon.pl'): return False
+    else: return True
 
 
 
@@ -211,18 +229,19 @@ def minimumTerm(personId):
 def main():
     #username = "rooms@propertypeopleni.com"
     #password = "Atlantic"
-    '''username = 'kamrankhadijadj@gmail.com'
+    username = 'kamrankhadijadj@gmail.com'
     password = 'Khadija?9'
     
     session = getLoginSession(username, password)
-    getClicks(session)'''
+    print(correctUser(username, password))
+    #'''
     #print(datetime.strptime('2021-07-31T23:00:00Z'))
-    d1 = datetime(2000,5,1,13,5,12)
+    '''d1 = datetime(2000,5,1,13,5,12)
     d2 = datetime.now()
     d3 = d2 - d1
     print(d1)
     print(d2)
-    print(d3.total_seconds())
+    print(d3.total_seconds())'''
 
 
 

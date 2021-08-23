@@ -33,6 +33,12 @@ def updateStats(user):
     spare_room_username = user[4]
     spare_room_password = user[5]
     last_stats_update = strToDateTime(user[7])
+    sql_stats_exist = """SELECT * FROM tb_stats WHERE user_id=?"""
+    stats = conn.cursor().execute(sql_stats_exist,(user_id,)).fetchall()
+    #print(stats)
+    if(stats==[]):
+        for i in range(1,25):
+            conn.execute("INSERT INTO tb_stats (user_id, clicks, timeStamp) VALUES (?, ?, ?)",(user_id, 0, i))
     session = getLoginSession(spare_room_username, spare_room_password)
     current_stats = getClicks(session)
     current_time = datetime.now()
@@ -185,23 +191,23 @@ def updateRatio(area):
 
 
 def main():
-    '''
-    conn = db_connection()
+    
+    '''conn = db_connection()
     conn.execute("INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",("Khadija Kamran", "Khadija?9", "User", "kamrankhadijadj@gmail.com","Khadija?9",1 , datetime.now() , datetime.now()))
-    conn.execute("INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",("Bushra Hassan", "bush", "User", "kkamran.bese16seecs@gmail.com","kamran",22 , datetime.now() , datetime.now()))
+    #conn.execute("INSERT INTO tb_users (username, password, role, site_username, site_password, renew_hours, last_stats_update, last_time_renewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",("Bushra Hassan", "bush", "User", "kkamran.bese16seecs@gmail.com","kamran",22 , datetime.now() , datetime.now()))
     
     for i in range(1,25):
         conn.execute("INSERT INTO tb_stats (user_id, clicks, timeStamp) VALUES (?, ?, ?)",(1, 0, i))
-        conn.execute("INSERT INTO tb_stats (user_id, clicks, timeStamp) VALUES (?, ?, ?)",(2, 0, i))
+        #conn.execute("INSERT INTO tb_stats (user_id, clicks, timeStamp) VALUES (?, ?, ?)",(2, 0, i))
 
     conn.execute("INSERT INTO tb_messages (shortTermMessage, midTermMessage, longTermMessage, followUpMessage, followUpDuration, user_id) VALUES (?, ?, ?, ?, ?, ?)",('This is a short term message','This is a mid term message', 'This is a long term message','This is a follow up message', 23, 1))
-    conn.execute("INSERT INTO tb_messages (shortTermMessage, midTermMessage, longTermMessage, followUpMessage, followUpDuration, user_id) VALUES (?, ?, ?, ?, ?, ?)",('This is a short term message','This is a mid term message', 'This is a long term message','This is a follow up message', 2, 2))
+    #conn.execute("INSERT INTO tb_messages (shortTermMessage, midTermMessage, longTermMessage, followUpMessage, followUpDuration, user_id) VALUES (?, ?, ?, ?, ?, ?)",('This is a short term message','This is a mid term message', 'This is a long term message','This is a follow up message', 2, 2))
 
     conn.execute("INSERT INTO tb_areas (areaName, ratio, last_ratio_update) VALUES (?, ?, ?)",('Belfast', getRoomsRatio('Belfast'), datetime.now()))
     conn.execute("INSERT INTO tb_areas (areaName, ratio, last_ratio_update) VALUES (?, ?, ?)",('Birmingham', getRoomsRatio('Birmingham'), datetime.now()))
     
     conn.execute("INSERT INTO tb_user_areas (user_id, area_id) VALUES (?, ?)",(1,1))
-    conn.execute("INSERT INTO tb_user_areas (user_id, area_id) VALUES (?, ?)",(2,2))
+    #conn.execute("INSERT INTO tb_user_areas (user_id, area_id) VALUES (?, ?)",(2,2))
     
     conn.commit()
 
@@ -214,7 +220,6 @@ def main():
     users = conn.execute(get_all_users_query).fetchall()
     areas = conn.execute(get_all_areas_query).fetchall()
 
-    
     while(True):
         
         for user in users:
@@ -235,7 +240,7 @@ def main():
         conn.commit()
 
             
-    
+
 
 if __name__ == "__main__":
     main()
